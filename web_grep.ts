@@ -4,19 +4,6 @@ import { getBrowserAndContext } from './browser';
 import { Readability } from '@mozilla/readability';
 import { JSDOM } from 'jsdom';
 
-// Hash alphabet - excludes ambiguous chars (D/G/I/L/O), hex digits, vowels
-const HASH_ALPHABET = "ZPMQVRWSNKTXJBYH";
-
-function hashLine(text: string): string {
-	let h = 5381;
-	for (let i = 0; i < text.length; i++) {
-		h = ((h << 5) + h + text.charCodeAt(i)) | 0;
-	}
-	const c1 = HASH_ALPHABET[Math.abs(h) % HASH_ALPHABET.length];
-	const c2 = HASH_ALPHABET[Math.floor(Math.abs(h) / HASH_ALPHABET.length) % HASH_ALPHABET.length];
-	return `${c1}${c2}`;
-}
-
 async function getCleanLines(page: any, url: string): Promise<string[]> {
 	try {
 		const html = await page.content();
@@ -40,9 +27,9 @@ async function getCleanLines(page: any, url: string): Promise<string[]> {
 const webReadTool = defineTool({
 	name: "web_read",
 	label: "Web Read",
-	description: `Read a web page as text with line numbers and hash anchors. 
+	description: `Read a web page as text.
 Like the local read tool but for URLs. Supports offset/limit for chunked reading.
-Returns clean text lines in LINE#HASH format that can be used to reference specific content.`,
+Returns clean text lines.`,
 	parameters: Type.Object({
 		url: Type.String({ description: "The URL of the page to read" }),
 		offset: Type.Optional(Type.Number({ 
@@ -84,9 +71,7 @@ Returns clean text lines in LINE#HASH format that can be used to reference speci
 			output += '\n';
 
 			for (let i = 0; i < sliced.length; i++) {
-				const lineNum = startIdx + i + 1;
-				const hash = hashLine(sliced[i]);
-				output += `${lineNum}#${hash}:${sliced[i]}\n`;
+				output += `${sliced[i]}\n`;
 			}
 
 			if (endIdx < lines.length) {
@@ -108,7 +93,7 @@ Returns clean text lines in LINE#HASH format that can be used to reference speci
 const webGrepTool = defineTool({
 	name: "web_grep",
 	label: "Web Grep",
-	description: `Search a web page for matching lines. Returns line numbers, hash anchors and context around matches.
+	description: `Search a web page for matching lines. Returns context around matches.
 Like grep but for URLs. Pattern is case-insensitive substring match.`,
 	parameters: Type.Object({
 		url: Type.String({ description: "The URL of the page to search" }),
@@ -161,25 +146,22 @@ Like grep but for URLs. Pattern is case-insensitive substring match.`,
 			const shown = matches.slice(0, maxResults);
 
 			for (const match of shown) {
-				const lineNum = match.index + 1;
-				const hash = hashLine(match.line);
-
 				// Context before
 				if (contextLines > 0 && match.index > 0) {
 					const ctxStart = Math.max(0, match.index - contextLines);
 					for (let i = ctxStart; i < match.index; i++) {
-						output += `${i + 1}#${hashLine(lines[i])}:${lines[i]}\n`;
+						output += `${lines[i]}\n`;
 					}
 				}
 
 				// Match line highlighted
-				output += `**${lineNum}#${hash}:${match.line}**\n`;
+				output += `**${match.line}**\n`;
 
 				// Context after
 				if (contextLines > 0 && match.index < lines.length - 1) {
 					const ctxEnd = Math.min(lines.length, match.index + contextLines + 1);
 					for (let i = match.index + 1; i < ctxEnd; i++) {
-						output += `${i + 1}#${hashLine(lines[i])}:${lines[i]}\n`;
+						output += `${lines[i]}\n`;
 					}
 				}
 
