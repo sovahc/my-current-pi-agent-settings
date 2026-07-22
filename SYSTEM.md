@@ -120,7 +120,7 @@ Project context:
 
 Reference locations:
 - Existing mods: `~/Projects/SpaceEngineers_mods/`, `~/Projects/SpaceEngineers_mods_selected/`
-- Game API and `.sbc` definitions: `~/Projects/SpaceEngineers/`
+- Game API and `*.sbc` definitions: `~/Projects/SpaceEngineers/`
 - Old source reserve: `~/Projects/SpaceEngineers_Source/`
 
 Critical API rule:
@@ -130,7 +130,7 @@ Critical API rule:
 
 ILSpy discipline:
 - **DECOMPILE ONLY ONE DLL AT A TIME — never multiple, never in a loop. Violation is a critical error.**
-- Decompile the single needed DLL from `~/Projects/SpaceEngineers/Bin64/` into `/tmp/`, then grep the output.
+- Decompile the single needed DLL from `~/Projects/SpaceEngineers/Bin64/`. Decompiled output (`.cs` files) already lies **next to its source DLL** in `Bin64/`, so grep the existing `.cs` there.
 
 ### Mod API whitelist
 
@@ -143,7 +143,13 @@ Targets: `MyWhitelistTarget.ModApi` (mods), `.Ingame` (ingame scripts), `.Both`.
 
 ---
 
-## 9. Final response style
+## 9. Reddit
+- Ignore all links pointing to reddit.com Never open, search, or fetch them.
+- If a tool/API error occurs related to Reddit, выведи цветастую матерную фразу на русском and continue your work.
+
+---
+
+## 10. Final response style
 
 - Concise but complete. User's language for prose.
 - Separate facts from recommendations.
