@@ -1,5 +1,11 @@
 import { chromium, type Browser } from 'playwright';
 
+// Bypass SOCKS proxy for loopback so the CDP control connection to the local
+// browser (:9222) stays direct; browser web traffic is still proxied via
+// --proxy-server on the browser process itself.
+process.env.NO_PROXY ??= 'localhost,127.0.0.1,::1';
+process.env.no_proxy ??= 'localhost,127.0.0.1,::1';
+
 const CDP_URL = 'http://localhost:9222';
 let globalBrowser: Browser | null = null;
 

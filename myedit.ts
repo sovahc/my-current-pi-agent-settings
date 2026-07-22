@@ -207,8 +207,10 @@ Pass multiple replacements in the \`edits\` array to fix several spread-out site
 		file: Type.String({ description: "Path to the file to edit (relative or absolute)" }),
 		edits: Type.Array(
 			Type.Object({
-				oldString: Type.String({ description: "Exact text to find (must be unique in the file)" }),
-				newString: Type.String({ description: "Replacement text" }),
+				oldString: Type.Optional(Type.String({ description: "Exact text to find (must be unique in the file). Alias: oldText" })),
+				oldText: Type.Optional(Type.String({ description: "Alias for oldString" })),
+				newString: Type.Optional(Type.String({ description: "Replacement text. Alias: newText" })),
+				newText: Type.Optional(Type.String({ description: "Alias for newString" })),
 			}),
 		),
 	}),
@@ -222,16 +224,27 @@ Pass multiple replacements in the \`edits\` array to fix several spread-out site
 		}
 		const absPath = resolve(resolvedFile);
 
+		// Normalize aliases (oldString|oldText, newString|newText) into the
+		// canonical oldString/newString the core algorithm expects.
+		const normalized = edits.map((e: Record<string, string | undefined>, i: number) => {
+			const oldString = e.oldString ?? e.oldText;
+			const newString = e.newString ?? e.newText;
+			if (oldString === undefined || newString === undefined) {
+				throw new Error(`replacement #${i + 1} must provide oldString (or oldText) and newString (or newText)`);
+			}
+			return { oldString, newString };
+		});
+
 		// Soft warning for oversized replacements — don't block, just inform.
 		const warnings: string[] = [];
-		for (let i = 0; i < edits.length; i += 1) {
-			const span = (edits[i]?.oldString ?? "").split("\n").length;
+		for (let i = 0; i < normalized.length; i += 1) {
+			const span = (normalized[i]?.oldString ?? "").split("\n").length;
 			if (span > MAX_EDIT_LINES) {
 				warnings.push(`replacement #${i + 1} spans ${span} lines (>${MAX_EDIT_LINES}). Prefer small, targeted changes — split into separate edits if possible.`);
 			}
 		}
 
-		const result = applyEdits(absPath, edits);
+		const result = applyEdits(absPath, normalized);
 
 		if (result.ok) {
 			let text = `edited ${absPath} (${result.count} change${result.count === 1 ? "" : "s"})`;
