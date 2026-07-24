@@ -6,7 +6,7 @@ const SEARCH_ENGINES: Record<string, { url: string; domain: string; forbiddenDom
 	google: {
 		url: 'https://www.google.com/search?q=',
 		domain: 'google',
-		forbiddenDomains: ['youtube.com', 'youtu.be'],
+		forbiddenDomains: ['youtube.com', 'youtu.be', 'reddit.com', 'researchgate.com', 'linkedin.com'],
 	},
 	brave: {
 		url: 'https://search.brave.com/search?q=',
@@ -88,48 +88,57 @@ const webSearchTool = defineTool({
 				let linkText = "";
 				let descriptionText = '';
 
-				const reddit = /\d+\s+posts/i;
-				const youtube = /YouTube ·/i;
+			const noisePatterns = [
+				/\d+\s+posts/i, /YouTube ·/i, /reddit/i, /researchgate/i, /linkedin/i,
+				/people also ask/i, /what are the trends/i, /discussions and forums/i, /video on some of the top/i,
+				/reactions ·.*ago/i, /\d+\s+reactions/i
+			];
 
-				for (const el of document.querySelectorAll('*')) {
-					if (el === firstLink) start = true;
-					if (el === lastLink) stop = true;
+			for (const el of document.querySelectorAll('*')) {
+				if (el === firstLink) start = true;
+				if (el === lastLink) stop = true;
 
-					if (!start) continue;
-					
-					const d = getDepth(el);
-					
-					const isLink = linkSet.has(el);
-					const shouldStopAndBreak = stop && !knownDepths.has(d);
+				if (!start) continue;
+				
+				const d = getDepth(el);
+				
+				const isLink = linkSet.has(el);
+				const shouldStopAndBreak = stop && !knownDepths.has(d);
 
-					if ((isLink || shouldStopAndBreak) && descriptionText.length > 0) {
+				if ((isLink || shouldStopAndBreak) && descriptionText.length > 0) {
+					// Skip noise: don't emit results matching known junk patterns
+					const linkHasNoise = noisePatterns.some(p => p.test(linkText));
+					const descHasNoise = noisePatterns.some(p => p.test(descriptionText));
+					if (!linkHasNoise && !descHasNoise) {
 						result += `${linkText}\n${descriptionText}\n\n`;
-						descriptionText = '';
-						index += 1;
 					}
+					descriptionText = '';
+					index += 1;
+				}
 
-					if (shouldStopAndBreak) break;
+				if (shouldStopAndBreak) break;
 
-					knownDepths.add(d);
+				knownDepths.add(d);
 
-					if (isLink) {
-						if (index > maxResults) break;
-						linkText = `## ${index}. ${el.href}\n`;
-					} else {
-						if(el.tagName == 'SCRIPT' || el.tagName == 'STYLE') continue; // Hi, Google!
-						
-						const t = el.innerText?.trim();
-						if(!t) continue;
-						
-						if(t.includes('http://') || t.includes('https://')) continue;
-						if(reddit.test(t)) continue; // Hi, Reddit!
-						if(youtube.test(t)) continue; // Hi, Google, again!
+				if (isLink) {
+					if (index > maxResults) break;
+					linkText = `## ${index}. ${el.href}\n`;
+				} else {
+					if(el.tagName == 'SCRIPT' || el.tagName == 'STYLE') continue; // Hi, Google!
+					
+					const t = el.innerText?.trim();
+					if(!t) continue;
+					
+					if(t.includes('http://') || t.includes('https://')) continue;
 
-						if(t.length > descriptionText.length) {
-							descriptionText = t.replace(/(...)?\s*Read more$/i, '');
-						}
+					// Skip elements that are clearly noise sections
+					if(noisePatterns.some(p => p.test(t))) continue;
+
+					if(t.length > descriptionText.length) {
+						descriptionText = t.replace(/(...)?\s*Read more$/i, '');
 					}
 				}
+			}
 
 				if (descriptionText.length > 0) {
 					result += `${descriptionText}\n\n`;
