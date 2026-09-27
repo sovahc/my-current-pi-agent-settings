@@ -51,7 +51,7 @@ Returns clean text lines.`,
 
 			const { context } = await getBrowserAndContext();
 			page = await context.newPage();
-			page.on('dialog', dialog => dialog.dismiss());
+			page.on('dialog', dialog => { dialog.dismiss().catch(() => {}); }); // dismiss rejects with "No dialog is showing" if the browser already closed the dialog (CDP race) — harmless
 
 			await page.goto(params.url, { waitUntil: 'domcontentloaded', timeout: 15000 });
 
@@ -118,7 +118,7 @@ Like grep but for URLs. Pattern is case-insensitive substring match.`,
 
 			const { context } = await getBrowserAndContext();
 			page = await context.newPage();
-			page.on('dialog', dialog => dialog.dismiss());
+			page.on('dialog', dialog => { dialog.dismiss().catch(() => {}); }); // dismiss rejects with "No dialog is showing" if the browser already closed the dialog (CDP race) — harmless
 
 			await page.goto(params.url, { waitUntil: 'domcontentloaded', timeout: 15000 });
 

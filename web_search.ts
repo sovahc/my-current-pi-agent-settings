@@ -43,7 +43,7 @@ const webSearchTool = defineTool({
 			const config = SEARCH_ENGINES[params.engine];
 
 			page = await context.newPage();
-			page.on('dialog', dialog => dialog.dismiss());
+			page.on('dialog', dialog => { dialog.dismiss().catch(() => {}); }); // dismiss rejects with "No dialog is showing" if the browser already closed the dialog (CDP race) — harmless
 
 			const searchUrl = `${config.url}${encodeURIComponent(params.query)}`;
 			await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 15000 });
