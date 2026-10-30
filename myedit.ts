@@ -200,7 +200,7 @@ function editFailHelp(file: string, result: { reason: string; matches?: number }
 const editTool = defineTool({
 	name: "myedit",
 	label: "myedit",
-	description: `Apply str_replace edits to a file. Each edit specifies an \`oldString\` (exact text to find) and a \`newString\` (replacement). The match must be exact and unique — 0 matches is not-found, >1 is ambiguous.
+	description: `**PREFERRED EDIT TOOL** — use this instead of the built-in \`edit\` for every text-file change. Apply str_replace edits to a file. Each edit specifies an \`oldString\` (exact text to find) and a \`newString\` (replacement). The match must be exact and unique — 0 matches is not-found, >1 is ambiguous.
 
 Pass multiple replacements in the \`edits\` array to fix several spread-out sites in one turn. All replacements are applied atomically: if any one fails, nothing is written.`,
 	parameters: Type.Object({
@@ -267,6 +267,35 @@ Pass multiple replacements in the \`edits\` array to fix several spread-out site
 	},
 });
 
+/**
+ * Withdraw the built-in `edit`. Pi lets an extension re-register a tool by name,
+ * and `exposure: "hidden"` drops it from both the declared and the callable sets
+ * (tools cannot be unregistered), so the model reaches str_replace edits only
+ * through `myedit`. execute is unreachable while pi keeps the hidden contract —
+ * throwing keeps a future regression visible instead of silently editing files.
+ */
+const hiddenEditTool = defineTool({
+	name: "edit",
+	label: "edit",
+	description: "Disabled by the myedit extension — use myedit.",
+	parameters: Type.Object({}),
+	exposure: "hidden",
+	async execute() {
+		throw new Error("`edit` is withdrawn by the myedit extension; call `myedit`");
+	},
+});
+
 export default function (pi: ExtensionAPI) {
 	pi.registerTool(editTool);
+	pi.registerTool(hiddenEditTool);
+
+	// defaultTools still put the built-in `edit` in the active set before this
+	// extension loaded; hidden removes only its declaration, so drop the name as
+	// well — otherwise the TUI tool list shows an active tool the model cannot call.
+	pi.on("session_start", (_event, _ctx) => {
+		const active = pi.getActiveTools();
+		if (active.includes("edit")) {
+			pi.setActiveTools(active.filter((name) => name !== "edit"));
+		}
+	});
 }

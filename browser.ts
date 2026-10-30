@@ -65,6 +65,12 @@ export async function getBrowserAndContext() {
 		globalBrowser = await chromium.connectOverCDP(CDP_URL);
 		const contexts = await globalBrowser.contexts();
 		const context = contexts[0];
+		// Dialogs on pages without a subscription (our own browser tabs) trigger
+		// Playwright's server-side auto-close, which is unguarded in 1.59.1 and
+		// crashes the agent on the "No dialog is showing" race. A context-level
+		// subscription makes the dispatcher claim every dialog, disabling the
+		// auto-close; foreign dialogs are then left for the user to click.
+		context.on('dialog', () => {});
 		return { browser: globalBrowser, context };
 	} catch (error: any) {
 		globalBrowser = null;
