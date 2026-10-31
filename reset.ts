@@ -10,9 +10,10 @@
  * task: it never thinks to hand over by itself. One warning, not the three-stage ladder the LLE mod
  * uses - a strong model needs telling once.
  *
- * The memory file is memory.md in the project root, so every project keeps its own record and a
- * reset from any of its subdirectories still lands on it. Only what cannot be re-derived belongs in
- * it: a file that duplicates the source is a second, staler copy of the source.
+ * The memory file is memory.md in the project root - the directory directly below ~/Projects - so
+ * every project keeps its own record and a reset from any of its subdirectories still lands on it.
+ * Only what cannot be re-derived belongs in it: a file that duplicates the source is a second,
+ * staler copy of the source.
  */
 
 import {
@@ -20,10 +21,12 @@ import {
 	type BoundaryResult,
 	type ExtensionAPI,
 	type ExtensionContext,
+	type SessionBoundaryDraft,
 } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { randomInt } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
 const MEMORY_BASENAME = "memory.md";
@@ -36,7 +39,7 @@ const MEMORY_CHECKLIST =
 
 /** Where the file sits, in the words a model sees before any call hands it the resolved path. */
 const MEMORY_LOCATION =
-	"the project root directory (the nearest ancestor holding .git, or the working directory when none does)";
+	"the project root - under ~/Projects that is the project directory directly below it, elsewhere the nearest ancestor holding .git (or the working directory when none does)";
 
 /** Selection and density rule; shared by the tool description, the context warning and the refusal. */
 const MEMORY_RULE =
@@ -67,8 +70,27 @@ function buildTranscriptNote(sessionFile: string, sessionId: string): string {
 	].join("\n");
 }
 
+/** One directory per project, directly below ~/Projects. */
+const PROJECTS_DIR = join(homedir(), "Projects");
+
+/** Nearest ancestor of cwd that is a direct child of ~/Projects, null when cwd is not under it. */
+function projectsRoot(cwd: string): string | null {
+	const projects = resolve(PROJECTS_DIR);
+	let dir = resolve(cwd);
+	for (;;) {
+		const parent = dirname(dir);
+		if (parent === dir) {
+			return null;
+		}
+		if (parent === projects) {
+			return dir;
+		}
+		dir = parent;
+	}
+}
+
 /** Nearest ancestor of cwd holding .git (directory or worktree file), cwd itself when none does. */
-function projectRoot(cwd: string): string {
+function gitRoot(cwd: string): string {
 	const start = resolve(cwd);
 	let dir = start;
 	for (;;) {
@@ -81,6 +103,15 @@ function projectRoot(cwd: string): string {
 		}
 		dir = parent;
 	}
+}
+
+/**
+ * Root of the project whose record this is. ~/Projects outranks .git: a checkout nested inside a
+ * project directory (a vendored library, a submodule) is not the project the work belongs to.
+ */
+function projectRoot(cwd: string): string {
+	const start = resolve(cwd);
+	return projectsRoot(start) ?? gitRoot(start);
 }
 
 function memoryFile(cwd: string | undefined): string {
@@ -111,9 +142,19 @@ function buildSummary(memory: string, sessionFile: string | undefined, sessionId
 		"",
 		buildMemoryNote(memory),
 		"",
-		"Continue the task above from the point it reports, with the next step it names. The memory file is the whole record of the work: whatever it does not state is not known, so re-derive it with tools or ask, and keep any account of the work to what is written there.",
+		"The memory file is the whole record of the work: whatever it does not state is not known, so re-derive it with tools or ask, and keep any account of the work to what is written there.",
 		transcript,
 	].join("\n");
+}
+
+/**
+ * The request to act, sent as a turn of its own after the note. A compaction summary reaches the
+ * provider as a user message wrapped in "the conversation history before this point was compacted",
+ * which a weak model reads as data to acknowledge rather than as work to resume; a `custom_message`
+ * entry is mapped to the user role too (convertToLlm in core/messages.ts) and lands last.
+ */
+function buildContinuationNote(): string {
+	return "Continue the task the note above reports if it is not finished: take the next step it names. If it reports the work complete, output a brief report of what was done and change nothing.";
 }
 
 function buildRefused(memory: string, pin: string): string {
@@ -253,10 +294,18 @@ export default function (pi: ExtensionAPI) {
 
 		// Without runnable context the compaction is still committed, so the memory note
 		// survives to whatever the next request is, but Pi would reject continuation.
-		const entries = [{ type: "compaction" as const, summary, firstKeptEntryId: null }];
+		const entries: SessionBoundaryDraft[] = [{ type: "compaction", summary, firstKeptEntryId: null }];
 		if (event.outcome !== "completed" || !event.context.canContinue) {
+			// No continuation to answer the note, so no instruction turn either: a stale imperative left
+			// here would compete with whatever the user asks for next.
 			return { entries };
 		}
+		entries.push({
+			type: "custom_message",
+			customType: "reset/continuation",
+			content: buildContinuationNote(),
+			display: true,
+		});
 		return { entries, continue: true };
 	});
 }
