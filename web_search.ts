@@ -1,6 +1,6 @@
 import { Type } from "@mariozechner/pi-ai";
 import { defineTool, type ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import { getBrowserAndContext } from './browser';
+import { getBrowserAndContext, openBackgroundPage } from './browser';
 
 const SEARCH_ENGINES: Record<string, { url: string; domain: string; forbiddenDomains?: string[] }> = {
 	google: {
@@ -21,7 +21,7 @@ const SEARCH_ENGINES: Record<string, { url: string; domain: string; forbiddenDom
 const webSearchTool = defineTool({
 	name: "web_search",
 	label: "Web Search",
-	description: "Search the web using a specified search engine",
+	description: "Search the web using a specified search engine. When running several searches at the same time, spread them across the engines ('google', 'brave'): repeated concurrent queries to one engine get flagged as a bot and end in a CAPTCHA",
 	parameters: Type.Object({
 		query: Type.String({ description: "The search query" }),
 		engine: Type.String({ description: "The search engine to use (e.g., 'google', 'brave')" }),
@@ -42,7 +42,7 @@ const webSearchTool = defineTool({
 			const { context } = await getBrowserAndContext();
 			const config = SEARCH_ENGINES[params.engine];
 
-			page = await context.newPage();
+			page = await openBackgroundPage(context);
 			page.on('dialog', dialog => { dialog.dismiss().catch(() => {}); }); // dismiss rejects with "No dialog is showing" if the browser already closed the dialog (CDP race) — harmless
 
 			const searchUrl = `${config.url}${encodeURIComponent(params.query)}`;

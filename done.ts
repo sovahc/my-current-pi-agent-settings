@@ -7,6 +7,10 @@
  *
  * The file is checked when the tool is called, not at the turn boundary: a reset pointing at a
  * missing file has already discarded the only conversation that knew where the work stood.
+ *
+ * Context-usage marks ride on the same boundary: the model does not see the footer percentage, so each
+ * crossed level (50, 60, 70, 80, 90%) is announced once as a user-role message. The last three tell it
+ * to wrap up, the last one to save and call `done`.
  */
 
 import {
@@ -20,6 +24,27 @@ import { resolve } from "node:path";
 
 /** Task file of the reset armed by a `done` call, cleared by the turn boundary that carries it out. */
 let armed: string | null = null;
+
+/** Context-usage marks, announced once each when the usage crosses the level. */
+const LEVELS: ReadonlyArray<{ percent: number; text: string }> = [
+	{ percent: 50, text: "Context usage crossed 50%." },
+	{ percent: 60, text: "Context usage crossed 60%." },
+	{ percent: 70, text: "Warning: context usage crossed 70%. Bring the task file up to date now, then finish the current step." },
+	{ percent: 80, text: "Warning: context usage crossed 80%. Finish the current step and update the task file; start nothing new." },
+	{ percent: 90, text: "Context usage crossed 90%. Save the work results to the task file and call done now." },
+];
+
+/** Highest level announced in the current context, -1 below the first one; follows the usage back down after a reset. */
+let announced = -1;
+
+/** Index of the highest level the usage has crossed, -1 below the first one. */
+function levelAt(percent: number): number {
+	let level = -1;
+	for (let i = 0; i < LEVELS.length && percent >= LEVELS[i].percent; i++) {
+		level = i;
+	}
+	return level;
+}
 
 /** The one line a cold resume gets: everything else has to come from the file itself. */
 function handover(file: string): string {
@@ -86,6 +111,7 @@ export default function (pi: ExtensionAPI) {
 		}
 		const file = armed;
 		armed = null;
+		announced = -1;
 		if (ctx.hasUI) {
 			ctx.ui.notify("Done: context discarded at end of turn", "info");
 		}
@@ -96,5 +122,29 @@ export default function (pi: ExtensionAPI) {
 			return { entries };
 		}
 		return { entries, continue: true };
+	});
+
+	pi.on("turn_end", (event, ctx) => {
+		// A compaction draft in the proposal discards this context: there is nothing to announce into it.
+		if (event.entries.some((entry) => entry.type === "compaction")) {
+			return;
+		}
+		const percent = ctx.getContextUsage()?.percent;
+		if (percent === null || percent === undefined) {
+			return;
+		}
+		const level = levelAt(percent);
+		const crossed = level > announced;
+		announced = level;
+		if (!crossed) {
+			return;
+		}
+		const entries: SessionBoundaryDraft[] = [
+			...event.entries,
+			{ type: "custom_message", customType: "context-usage", content: LEVELS[level].text, display: true },
+		];
+		// The last mark is an order: with no pending tool results it gets a request of its own.
+		const order = level === LEVELS.length - 1 && event.toolResults.length === 0 && event.outcome === "completed" && event.context.canContinue;
+		return order ? { entries, continue: true } : { entries };
 	});
 }
