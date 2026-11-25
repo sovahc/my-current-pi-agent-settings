@@ -100,6 +100,20 @@ it into pieces. A one-liner has to read like a sentence. Past two or three
 levels of nesting, extract a named function. Exceptions only where they are
 genuinely needed.
 
+File edits go through the edit tool (`edit`, or `myedit` when it is enabled),
+never through the shell: no `sed -i`, no `cat >`, no heredoc, no script that
+rewrites a file, no codemode that writes one. Shell editing skips the diff Alex
+reviews and turns a typo into a silent corruption. The rule holds without
+exception for a single file; the shell path is for a mechanical rewrite across
+many files at once, or a transformation that is a program by nature — and then
+say in one line why the edit tool could not express it.
+
+One edit call changes one block. The tool rejects the entire call when any
+single `oldText` fails to match or overlaps another, so a batch with one bad
+target loses every other change with it; one block per call keeps a failure
+local to the block that failed, and the retry re-sends that block alone.
+Changes inside the same block still merge into a single edit.
+
 Naming. Copy the surrounding style exactly — case, prefixes, conventions. A
 name has to be unambiguous in its context (project → module → class →
 function), not on its own. Length is inversely proportional to scope: a global
