@@ -27,11 +27,11 @@ let armed: string | null = null;
 
 /** Context-usage marks, announced once each when the usage crosses the level. */
 const LEVELS: ReadonlyArray<{ percent: number; text: string }> = [
-	{ percent: 50, text: "Context usage crossed 50%." },
-	{ percent: 60, text: "Context usage crossed 60%." },
-	{ percent: 70, text: "Warning: context usage crossed 70%. Bring the task file up to date now, then finish the current step." },
-	{ percent: 80, text: "Warning: context usage crossed 80%. Finish the current step and update the task file; start nothing new." },
-	{ percent: 90, text: "Context usage crossed 90%. Save the work results to the task file and call done now." },
+	{ percent: 50, text: "[Harness info: Context usage crossed 50%]" },
+	{ percent: 60, text: "[Harness info: Context usage crossed 60%]" },
+	{ percent: 70, text: "[Harness warning: Context usage crossed 70%. Bring the task file up to date now, then finish the current step]" },
+	{ percent: 80, text: "[Harness warning: Context usage crossed 80%. Finish the current step and update the task file; start nothing new]" },
+	{ percent: 90, text: "[Harness warning: Context usage crossed 90%. Save the work results to the task file and call done now]" },
 ];
 
 /** Highest level announced in the current context, -1 below the first one; follows the usage back down after a reset. */
@@ -63,14 +63,14 @@ const doneTool = defineTool({
 	name: "done",
 	label: "Done",
 	description:
-		"Discard this context and continue the work from a task file. Call it when the conversation is no longer " +
-		"worth its context: after a long investigation, before starting the implementation phase, or when you are " +
-		"repeating yourself. After the call the only thing left of this conversation is the line pointing at the " +
-		"file, so keep the file current while you work, not only before the call. Only what cannot be re-derived " +
-		"belongs there: what the source code does not say and a couple of web queries will not return - decisions " +
-		"and why they were taken, constraints, gotchas, dead ends, the state of the work. Write compact lines, not " +
-		"prose.",
-	promptSnippet: "Discard this context and continue the work from a task .md file",
+		"Resets this context, leaving in it only a pointer to the task.md file with the instruction to read it. "+
+		"Rules of use: task.md holds the list of the project's tasks and subtasks; new tasks and subtasks are appended at the end of the file. "+
+		"Statuses: [ ] not started, [/] in progress, [x] done, [-] dropped on purpose and not to be retried. Exactly one task carries [/], and the file always keeps one line saying what stands done now and what the next step is. "+
+		"A task is checked off immediately after it succeeds. After the status marker, in as few words as possible: how the task was done, and what must not be repeated so as not to waste time. "+
+		"The file is kept in English unless specified otherwise. "+
+		"When the harness warns that context usage has crossed 70%, bring the task file up to date at once, the in-progress line included; the warning at 90% orders the work results saved and done called. "+
+		"If the file grows so large that reading it costs repeated calls, trim the older entries that are too detailed.",
+	promptSnippet: "Discard this context and continue the work from a task.md file",
 	promptGuidelines: [
 		"Keep the task file current while you work, not only before a done call: the task in the words it was given, the constraints that still hold, what is done and verified, where the work stands, the next steps, the file paths that matter, any process still running.",
 		"Call done alone, or last in a tool batch, and never twice in a row: after it you are already continuing from the task file.",
